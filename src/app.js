@@ -7,7 +7,8 @@ import { xml } from "@codemirror/lang-xml";
 import { linter, setDiagnostics } from "@codemirror/lint";
 import { compile, fromJS, toJS } from "jslt-js";
 import { jsltLanguage, jsltHighlight, jsltAssist, toDiagnostic, jsonSyntaxErrors } from "jslt-editor/codemirror";
-import { formatJslt } from "jslt-editor/core";
+import { formatJslt, usableInput } from "jslt-editor/core";
+import { errorDelay } from "./quiet.js";
 import { examples } from "./examples.js";
 import { XML_DEFAULTS, parseXml, domToJson, jsonToXml } from "./xml.js";
 
@@ -41,10 +42,20 @@ let fmt = { in: "json", out: "json" }, xo = { ...XML_DEFAULTS };
 
 // files[0] is the main program; the others are importable by name. files[active] is what the JSLT editor shows.
 let files = [{ name: "main.jslt", text: "" }], active = 0, errFile = null;
-const ctx = () => ({ files: new Map(files.map((f) => [f.name, f.text])) });
+// inputJson: the last input that parsed, for `.` completion; it stays while the input is being edited into something invalid
+let inputJson = null;
+const ctx = () => ({ files: new Map(files.map((f) => [f.name, f.text])), input: inputJson });
 
 let timer;
-const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 250); };
+// errors wait for a pause (see quiet.js); the output of the last good run stays, dimmed, meanwhile
+let errTimer;
+const schedule = () => { clearTimeout(timer); clearTimeout(errTimer); timer = setTimeout(run, 250); };
+const caretLine = (v) => v.state.doc.lineAt(v.state.selection.main.head).number;
+// meanwhile the status is blank (the old message is about older text) and the output dims: it is not current
+const showError = (view, errLine, fn) => {
+  $("output").classList.add("stale"); status("");
+  errTimer = setTimeout(fn, errorDelay(errLine, caretLine(view), view.hasFocus));
+};
 const editable = [basicSetup, themeExt(), EditorView.updateListener.of((u) => {
   if (!u.docChanged) return;
   if (u.view === jslt) files[active].text = u.state.doc.toString();
@@ -60,6 +71,8 @@ const format = () => {
 const input = new EditorView({ parent: $("input"), extensions: [editable, inLang.of(inExt("json"))] });
 const jslt = new EditorView({ parent: $("jslt"), extensions: [editable, jsltLanguage, jsltHighlight, jsltAssist(ctx), keymap.of([{ key: "Shift-Alt-f", run: format }])] });
 const output = new EditorView({ parent: $("output"), extensions: [basicSetup, themeExt(), outLang.of(outExt("json")), EditorView.editable.of(false)] });
+
+globalThis.playground = { input, jslt, output }; // handle for scripts/smoke.mjs
 
 $("theme").onclick = () => {
   root.dataset.theme = isDark() ? "light" : "dark";
@@ -113,18 +126,24 @@ function run() {
   errFile = null;
   let data;
   if (fmt.in === "xml") input.dispatch(setDiagnostics(input.state, []));
-  try { data = fromJS(fmt.in === "xml" ? domToJson(parseXml(input.state.doc.toString()), xo) : JSON.parse(input.state.doc.toString())); }
-  catch (e) {
-    if (fmt.in === "xml" && e.line) {
-      // the parser may point past the end of the line (a missing closing tag); keep the range one visible character wide
-      const l = input.state.doc.line(Math.min(e.line, input.state.doc.lines));
-      let from = l.from + Math.max(e.col - 1, 0), to = from + 1;
-      if (to > l.to) { to = l.to; from = Math.max(l.from, to - 1); }
-      if (to <= from) from = Math.max(0, to - 1);
-      input.dispatch(setDiagnostics(input.state, [{ from, to, severity: "error", message: e.message }]));
-    }
+  clearTimeout(errTimer);
+  try {
+    const plain = fmt.in === "xml" ? domToJson(parseXml(input.state.doc.toString()), xo) : JSON.parse(input.state.doc.toString());
+    data = fromJS(plain);
+    inputJson = usableInput(plain);
+  } catch (e) {
     renderTabs();
-    return fail((fmt.in === "xml" ? "Input XML: " : "Input JSON: ") + e.message);
+    return showError(input, e.line || 1, () => {
+      if (fmt.in === "xml" && e.line) {
+        // the parser may point past the end of the line (a missing closing tag); keep the range one visible character wide
+        const l = input.state.doc.line(Math.min(e.line, input.state.doc.lines));
+        let from = l.from + Math.max(e.col - 1, 0), to = from + 1;
+        if (to > l.to) { to = l.to; from = Math.max(l.from, to - 1); }
+        if (to <= from) from = Math.max(0, to - 1);
+        input.dispatch(setDiagnostics(input.state, [{ from, to, severity: "error", message: e.message }]));
+      }
+      fail((fmt.in === "xml" ? "Input XML: " : "Input JSON: ") + e.message);
+    });
   }
   const byName = ctx().files;
   const resolver = { resolve(name) {
@@ -136,16 +155,23 @@ function run() {
     const result = compile(files[0].text, files[0].name, { resolver }).applyInput(data);
     const js = toJS(result);
     setText(output, fmt.out === "xml" ? jsonToXml(js, xo) : pretty(js));
+    $("output").classList.remove("stale");
     status(`ok · ${(performance.now() - t0).toFixed(1)} ms`, true);
   } catch (e) {
     const src = e.getSource ? e.getSource() : null;
-    errFile = files.some((f) => f.name === src) ? src : files[0].name;
-    if (e.getLine && files[active].name === errFile) jslt.dispatch(setDiagnostics(jslt.state, [toDiagnostic(e, jslt.state.doc)]));
-    fail(e.message);
+    const mine = files.some((f) => f.name === src) ? src : files[0].name;
+    // the line that gets underlined, which for an unfinished construct is above the line the parser failed on
+    const mark = e.getLine && files[active].name === mine ? toDiagnostic(e, jslt.state.doc) : null;
+    showError(jslt, mark ? jslt.state.doc.lineAt(mark.from).number : 1, () => {
+      errFile = mine;
+      if (mark) jslt.dispatch(setDiagnostics(jslt.state, [mark]));
+      fail(e.message);
+      renderTabs();
+    });
   }
   renderTabs();
 }
-function fail(msg) { setText(output, ""); status(msg); }
+function fail(msg) { $("output").classList.add("stale"); status(msg); }
 
 const snapshot = () => ({ i: input.state.doc.toString(), f: files.map((f) => ({ n: f.name, t: f.text })), fi: fmt.in, fo: fmt.out, xo });
 function save() {

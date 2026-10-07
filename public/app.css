@@ -35,3 +35,6 @@ header label { display: inline-flex; gap: 4px; align-items: center; }
 .cm-editor .tok-f { color: var(--hl-f); }
 .cm-editor .tok-b { color: var(--hl-b); }
 .cm-editor .tok-a { color: var(--hl-a); }
+
+/* the output of the last good run, while the current input or program does not work */
+#output.stale { opacity: .45; }

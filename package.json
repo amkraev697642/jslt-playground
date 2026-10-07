@@ -12,7 +12,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "@codemirror/lang-json": "6.0.2",
@@ -25,7 +26,7 @@
     "@lezer/highlight": "1.2.5",
     "codemirror": "6.0.2",
     "esbuild": "0.28.2",
-    "jslt-editor": "^0.3.0",
+    "jslt-editor": "^0.3.2",
     "jslt-js": "^0.3.0"
   }
 }
