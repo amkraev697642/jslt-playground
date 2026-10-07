@@ -38,3 +38,6 @@ header label { display: inline-flex; gap: 4px; align-items: center; }
 
 /* the output of the last good run, while the current input or program does not work */
 #output.stale { opacity: .45; }
+
+footer { padding: 4px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+footer a { color: inherit; }

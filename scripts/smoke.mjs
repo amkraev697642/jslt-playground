@@ -71,6 +71,13 @@ try {
   await waitFor(`!!document.querySelector("#jslt .cm-lintRange-error")`, 4500);
   record("and appears once the longer wait is over", (await shown()).mark === ".");
 
+  // state saved by another page of the same origin (the retired playground used "jslt-playground") is not restored
+  await evalJs(`localStorage.removeItem("jslt-playground-state"); localStorage.setItem("jslt-playground", JSON.stringify({ i: "{}", f: [{ n: "main.jslt", t: "{ v" }], fi: "json", fo: "xml" })); location.reload(); 1`);
+  await sleep(1200);
+  await waitFor(`!!globalThis.playground && document.getElementById("status").className === "ok"`, 5000);
+  const own = await evalJs(`({ fout: document.getElementById("fout").value, ok: document.getElementById("status").className === "ok", sel: document.getElementById("examples").value })`);
+  record("a saved state under the old key is ignored: first example, JSON output, no error", own.ok && own.fout === "json" && own.sel === "0", JSON.stringify(own));
+
   await setDoc("jslt", "{ \"ok\": true }", 14);
   await waitFor(`document.getElementById("status").className === "ok"`, 3000);
   const fixed = await shown();

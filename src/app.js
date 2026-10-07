@@ -173,9 +173,11 @@ function run() {
 }
 function fail(msg) { $("output").classList.add("stale"); status(msg); }
 
+// Its own key: all Pages sites of this GitHub user share one origin, and the retired playground at /jslt-js/ wrote "jslt-playground".
+const STORE = "jslt-playground-state";
 const snapshot = () => ({ i: input.state.doc.toString(), f: files.map((f) => ({ n: f.name, t: f.text })), fi: fmt.in, fo: fmt.out, xo });
 function save() {
-  try { localStorage.setItem("jslt-playground", JSON.stringify(snapshot())); } catch {}
+  try { localStorage.setItem(STORE, JSON.stringify(snapshot())); } catch {}
 }
 // st: {i: input text, f: [{n, t}], fi/fo: input/output format, xo: XML conventions}; the first version stored {i, j} (one program, no files).
 function load(st) {
@@ -191,8 +193,9 @@ function load(st) {
 }
 const fromExample = (x) => ({ i: x.inputText ?? pretty(x.input), fi: x.inputFormat, fo: x.outputFormat, f: [{ n: "main.jslt", t: x.jslt }, ...(x.files || []).map((f) => ({ n: f.name, t: f.text }))] });
 
-$("examples").append(...examples.map((e, n) => new Option(e.name, n)));
-$("examples").onchange = (e) => load(fromExample(examples[e.target.value]));
+// the dropdown starts on the placeholder: a restored session is not necessarily one of the examples
+$("examples").append(new Option("Examples…", ""), ...examples.map((e, n) => new Option(e.name, n)));
+$("examples").onchange = (e) => { if (e.target.value !== "") load(fromExample(examples[e.target.value])); };
 $("format").onclick = format;
 const formatsChanged = () => { setFormats(); save(); run(); };
 $("fin").onchange = (e) => { fmt.in = e.target.value; formatsChanged(); };
@@ -222,6 +225,7 @@ document.querySelectorAll(".gutter").forEach((g) => {
 (async () => {
   let st;
   try { if (location.hash.startsWith("#s=")) st = await b64.dec(location.hash.slice(3)); } catch {}
-  try { st ??= JSON.parse(localStorage.getItem("jslt-playground")); } catch {}
+  try { st ??= JSON.parse(localStorage.getItem(STORE)); } catch {}
   load(st || fromExample(examples[0]));
+  if (!st) $("examples").value = "0";
 })();
