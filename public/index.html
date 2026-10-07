@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSLT Playground</title>
+<link rel="stylesheet" href="app.css">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("jslt-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch {}</script>
+</head>
+<body>
+<header>
+  <b>JSLT Playground</b>
+  <select id="examples" title="Examples"></select>
+  <button id="format" title="Re-indent the JSLT (Shift-Alt-F)">Format</button>
+  <label title="Input format">in <select id="fin"><option value="json">JSON</option><option value="xml">XML</option></select></label>
+  <label title="Output format">out <select id="fout"><option value="json">JSON</option><option value="xml">XML</option></select></label>
+  <span id="xmlopts" hidden>
+    <select id="xattr" title="How XML attributes appear in JSON (and the other way round)"><option value="@">attributes: @name</option><option value="_">attributes: _name</option><option value="">attributes: dropped</option></select>
+    <select id="xarr" title="Repeated sibling elements always become an array; this also makes single children arrays"><option value="repeated">arrays: when repeated</option><option value="always">arrays: always</option></select>
+  </span>
+  <button id="theme" title="Switch light/dark">◐</button>
+  <button id="share">Copy share link</button>
+  <span id="status"></span>
+  <a href="https://github.com/amkraev697642/jslt-js">jslt-js on GitHub</a>
+</header>
+<main>
+  <section><h2>Input <span id="inl">JSON</span></h2><div id="input" class="ed"></div></section>
+  <div class="gutter"></div>
+  <section><h2>JSLT</h2><div id="tabs" class="tabs"></div><div id="jslt" class="ed"></div></section>
+  <div class="gutter"></div>
+  <section><h2>Output <span id="outl">JSON</span></h2><div id="output" class="ed"></div></section>
+</main>
+<script type="module" src="dist/app.js"></script>
+</body>
+</html>
